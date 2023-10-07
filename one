@@ -1,0 +1,75 @@
+using System;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+using OpenSource.UPnP;
+using OpenSource.UPnP.AV;
+
+class Program
+{
+    static async Task Main()
+    {
+        // Search for UPnP devices on the network
+        var discoveredDevices = await DiscoverUPnPDevicesAsync();
+
+        if (discoveredDevices.Count == 0)
+        {
+            Console.WriteLine("No UPnP devices found on the network.");
+            return;
+        }
+
+        // Select the device you want to share the file with
+        var selectedDevice = discoveredDevices[0]; // Change this to the desired device
+
+        // Replace with the path to the file you want to share
+        string filePath = "path_to_your_file.xyz";
+
+        // Share the file with the selected device
+        await ShareFileWithDeviceAsync(selectedDevice, filePath);
+    }
+
+    static async Task<UPnPDevice[]?> DiscoverUPnPDevicesAsync()
+    {
+        var finder = new UPnPDeviceFinder();
+        return await finder.FindByTypeAsync("upnp:rootdevice", 1);
+    }
+
+    static async Task ShareFileWithDeviceAsync(UPnPDevice device, string filePath)
+    {
+        try
+        {
+            // Get the service on the device that handles file sharing (e.g., an HTTP server)
+            var service = device.GetServices(new System.Type[] { typeof(UPnPService) })[0] as UPnPService;
+
+            // Build the URL for file sharing
+            string fileShareUrl = service.EventURL;
+
+            // Create an HttpClient for making HTTP requests
+            using (var httpClient = new HttpClient())
+            {
+                // Create a FileStream to read the file
+                using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    // Create a ByteArrayContent to send the file as binary data
+                    var fileContent = new ByteArrayContent(await fileStream.ReadAllBytesAsync());
+
+                    // Send the file using HTTP POST request to the device's file sharing service
+                    var response = await httpClient.PostAsync(fileShareUrl, fileContent);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine($"File sent successfully to {device.FriendlyName}.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"HTTP Error: {response.StatusCode} - {response.ReasonPhrase}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error: " + ex.Message);
+        }
+    }
+}
